@@ -39,7 +39,7 @@ class SimpleSwitch(app_manager.RyuApp):
         self.mac_to_port = {}
         block_h2_to_h3()
 
-    def block_h2_to_h3
+    def block_h2_to_h3:
         self.logger.info("================hello worl!!====================")
 
     def add_flow(self, datapath, in_port, dst, actions):
