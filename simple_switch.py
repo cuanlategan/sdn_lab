@@ -34,14 +34,16 @@ from ryu.lib.packet import ethernet
 class SimpleSwitch(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
 
+    def block_h2_to_h3():
+        self.logger.info("================hello worl!!====================")
+
+
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         block_h2_to_h3()
 
-    def block_h2_to_h3:
-        self.logger.info("================hello worl!!====================")
-
+    
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
 
