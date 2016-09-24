@@ -29,20 +29,15 @@ from ryu.ofproto import ofproto_v1_0
 from ryu.lib.mac import haddr_to_bin
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
-
+from ryu.lib.ip import ipv4_to_bin
 
 class SimpleSwitch(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
 
-    def block_h2_to_h3():
-        self.logger.info("================hello worl!!====================")
-
-
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
-        block_h2_to_h3()
-    
+        
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
 
@@ -107,3 +102,43 @@ class SimpleSwitch(app_manager.RyuApp):
             self.logger.info("port modified %s", port_no)
         else:
             self.logger.info("Illeagal port state %s %s", port_no, reason)
+
+    @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
+    def block_h2_to_h3(self, ev):
+        dp = ev.datapath
+        ofp = dp.ofproto
+        parser = dp.ofproto_parser
+        self.logger.info("Switch connected (id=%s)" % dp.id)
+     
+        """ 
+        self.logger.info("Clearing flow rules")
+        match = parser.OFPMatch()
+        mod = parser.OFPFlowMod(
+            match = match,
+            datapath = dp, cookie=0,
+            command  = ofp.OFPFC_DELETE, idle_timeout=0, hard_timeout=0,
+            flags    = ofp.OFPFF_SEND_FLOW_REM)
+        dp.send_msg(mod)
+        """ 
+        self.logger.info("Blocking IPv4 traffic between h2 to h3")
+        src_ip = '10.0.0.2'
+        dst_ip = '10.0.0.3'
+        nw_src = struct.unpack('!I', ipv4_to_bin(src_ip))[0]
+        nw_dst = struct.unpack('!I', ipv4_to_bin(dst_ip))[0]
+        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_src, nw_dst=nw_dst)                
+        actions = []
+                
+        mod = parser.OFPFlowMod(
+            datapath = dp, match=match, cookie=0,
+            command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
+            priority = 10,
+            flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions)
+        dp.send_msg(mod)
+
+        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_dst, nw_dst=nw_src)
+        mod = parser.OFPFlowMod(
+            datapath = dp, match=match, cookie=0,
+            command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
+            priority = 10,
+            flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions) 
+        dp.send_msg(mod)
