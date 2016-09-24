@@ -26,6 +26,7 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_0
+from ryu.ofproto import ether
 from ryu.lib.mac import haddr_to_bin
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
@@ -125,7 +126,9 @@ class SimpleSwitch(app_manager.RyuApp):
         dst_ip = '10.0.0.3'
         nw_src = struct.unpack('!I', ipv4_to_bin(src_ip))[0]
         nw_dst = struct.unpack('!I', ipv4_to_bin(dst_ip))[0]
-        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_src, nw_dst=nw_dst)                
+        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_src, nw_dst=nw_dst)
+        #0x0800 = IPv4 
+     
         actions = []
                 
         mod = parser.OFPFlowMod(
@@ -135,7 +138,7 @@ class SimpleSwitch(app_manager.RyuApp):
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions)
         dp.send_msg(mod)
 
-        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_dst, nw_dst=nw_src)
+        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_dst, nw_dst=nw_src)
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
