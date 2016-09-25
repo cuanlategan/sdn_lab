@@ -26,10 +26,11 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_0
-from ryu.ofproto import ether
+#from ryu.ofproto import ether
 from ryu.lib.mac import haddr_to_bin
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
+from ryu.lib.packet import arp
 from ryu.lib.ip import ipv4_to_bin
 
 class SimpleSwitch(app_manager.RyuApp):
@@ -48,7 +49,7 @@ class SimpleSwitch(app_manager.RyuApp):
         mod = datapath.ofproto_parser.OFPFlowMod(
             datapath=datapath, match=match, cookie=0,
             command=ofproto.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority=ofproto.OFP_DEFAULT_PRIORITY,
+            priority=1,#ofproto.OFP_DEFAULT_PRIORITY,
             flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
         datapath.send_msg(mod)
 
@@ -60,6 +61,10 @@ class SimpleSwitch(app_manager.RyuApp):
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocol(ethernet.ethernet)
+
+	if not eth:
+	    self.logger.info("packet is not eth")
+            return 
 
         dst = eth.dst
         src = eth.src
@@ -82,7 +87,9 @@ class SimpleSwitch(app_manager.RyuApp):
         # install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             self.add_flow(datapath, msg.in_port, dst, actions)
-
+        
+        self.logger.info("about to add flow, msg.buffer_id = %s",msg.buffer_id)     
+  
         out = datapath.ofproto_parser.OFPPacketOut(
             datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
             actions=actions)
@@ -111,8 +118,8 @@ class SimpleSwitch(app_manager.RyuApp):
         parser = dp.ofproto_parser
         self.logger.info("Switch connected (id=%s)" % dp.id)
      
-        """ 
-        self.logger.info("Clearing flow rules")
+        
+        """ self.logger.info("Clearing flow rules")
         match = parser.OFPMatch()
         mod = parser.OFPFlowMod(
             match = match,
@@ -126,22 +133,22 @@ class SimpleSwitch(app_manager.RyuApp):
         dst_ip = '10.0.0.3'
         nw_src = struct.unpack('!I', ipv4_to_bin(src_ip))[0]
         nw_dst = struct.unpack('!I', ipv4_to_bin(dst_ip))[0]
-        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_src, nw_dst=nw_dst)
-        #0x0800 = IPv4 
+        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_src, nw_dst=nw_dst)
+        #ether.ETH_TYPE_IP  
      
         actions = []
                 
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = 10,
+            priority = 999,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions)
         dp.send_msg(mod)
 
-        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_dst, nw_dst=nw_src)
+        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_dst, nw_dst=nw_src)
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = 10,
+            priority = 999,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions) 
         dp.send_msg(mod)
