@@ -159,5 +159,9 @@ class SimpleSwitch(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def flow_stats_reply_handler(self, ev):
         body = ev.msg.body
-        if len(body) > 0: 
-            self.logger.info('Host 1 packet count: %s', body[0].packet_count)
+        #if len(body) > 0: 
+            #self.logger.info('Host 1 packet count: %s', body[0].packet_count)
+        flows = []
+        for stat in body:    
+            print stat.packet_count
+        #self.logger.debug('FlowStats: %s', flows)    
