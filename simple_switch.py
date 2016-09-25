@@ -26,7 +26,7 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_0
-#from ryu.ofproto import ether
+from ryu.ofproto import ether
 from ryu.lib.mac import haddr_to_bin
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
@@ -53,7 +53,7 @@ class SimpleSwitch(app_manager.RyuApp):
         mod = datapath.ofproto_parser.OFPFlowMod(
             datapath=datapath, match=match, cookie=0,
             command=ofproto.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority=priority_low,
+            priority=self.PRI_LOW,
             flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
         datapath.send_msg(mod)
         
@@ -66,11 +66,6 @@ class SimpleSwitch(app_manager.RyuApp):
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocol(ethernet.ethernet)
-
-	if not eth:
-	    self.logger.info("packet is not eth")
-            return 
-
         dst = eth.dst
         src = eth.src
 
@@ -92,9 +87,7 @@ class SimpleSwitch(app_manager.RyuApp):
         # install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             self.add_flow(datapath, msg.in_port, dst, actions)
-        
-        self.logger.info("about to add flow, msg.buffer_id = %s",msg.buffer_id)     
-  
+       
         out = datapath.ofproto_parser.OFPPacketOut(
             datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
             actions=actions)
@@ -119,64 +112,52 @@ class SimpleSwitch(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
     def block_h2_to_h3(self, ev):
         dp = ev.datapath
-        
         self.controller_datapath = dp
-
         ofp = dp.ofproto
         parser = dp.ofproto_parser
+        
         self.logger.info("Switch connected (id=%s)" % dp.id)
-     
-         
         self.logger.info("Blocking IPv4 traffic between h2 to h3")
+
         src_ip = '10.0.0.2'
         dst_ip = '10.0.0.3'
         nw_src = struct.unpack('!I', ipv4_to_bin(src_ip))[0]
         nw_dst = struct.unpack('!I', ipv4_to_bin(dst_ip))[0]
-        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_src, nw_dst=nw_dst)
-        #ether.ETH_TYPE_IP  
-     
+       
         actions = []
-                
+
+        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_src, nw_dst=nw_dst)        
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = SimpleSwitch.PRI_HIGH,
+            priority = self.PRI_HIGH,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions)
         dp.send_msg(mod)
 
-        match = parser.OFPMatch(dl_type=0x0800, nw_src=nw_dst, nw_dst=nw_src)
+        match = parser.OFPMatch(dl_type=ether.ETH_TYPE_IP, nw_src=nw_dst, nw_dst=nw_src)
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = SimpleSwitch.PRI_HIGH,
+            priority = self.PRI_HIGH,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions) 
         dp.send_msg(mod)
 
     def _monitor(self):
         while True:
-            print('controller_datapth %d', self.controller_datapath)
             if self.controller_datapath != None:
-                print self.controller_datapath.id
                 ofproto = self.controller_datapath.ofproto
                 parser  = self.controller_datapath.ofproto_parser
                 match   = parser.OFPMatch(in_port=1)
                 datapath = self.controller_datapath
                 table_id = 0xff
                 out_port = ofproto.OFPP_NONE
+                
                 req = parser.OFPFlowStatsRequest(datapath, 0, match, table_id, out_port)
-
                 datapath.send_msg(req)
-
             hub.sleep(3)
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def flow_stats_reply_handler(self, ev):
-        msg = ev.msg
-        ofp = msg.datapath.ofproto
         body = ev.msg.body
-
-        flows = []
-        for stat in body:
-            #flows.append('count' %stat.packet_count)
-            print stat.packet_count
-        self.logger.debug('FlowStats: %s', flows)    
+        if len(body) > 0: 
+            self.logger.info('Host 1 packet count: %s', body[0].packet_count)
