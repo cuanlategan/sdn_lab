@@ -32,13 +32,17 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import arp
 from ryu.lib.ip import ipv4_to_bin
+from ryu.lib import hub
 
 class SimpleSwitch(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
+    (PRI_LOW, PRI_HIGH) = (50,100)
+    controller_datapath = None
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
+        self.monitor_thread = hub.spawn(self._monitor) 
         
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
@@ -49,9 +53,10 @@ class SimpleSwitch(app_manager.RyuApp):
         mod = datapath.ofproto_parser.OFPFlowMod(
             datapath=datapath, match=match, cookie=0,
             command=ofproto.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority=1,#ofproto.OFP_DEFAULT_PRIORITY,
+            priority=priority_low,
             flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
         datapath.send_msg(mod)
+        
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -114,20 +119,14 @@ class SimpleSwitch(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
     def block_h2_to_h3(self, ev):
         dp = ev.datapath
+        
+        self.controller_datapath = dp
+
         ofp = dp.ofproto
         parser = dp.ofproto_parser
         self.logger.info("Switch connected (id=%s)" % dp.id)
      
-        
-        """ self.logger.info("Clearing flow rules")
-        match = parser.OFPMatch()
-        mod = parser.OFPFlowMod(
-            match = match,
-            datapath = dp, cookie=0,
-            command  = ofp.OFPFC_DELETE, idle_timeout=0, hard_timeout=0,
-            flags    = ofp.OFPFF_SEND_FLOW_REM)
-        dp.send_msg(mod)
-        """ 
+         
         self.logger.info("Blocking IPv4 traffic between h2 to h3")
         src_ip = '10.0.0.2'
         dst_ip = '10.0.0.3'
@@ -141,7 +140,7 @@ class SimpleSwitch(app_manager.RyuApp):
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = 999,
+            priority = SimpleSwitch.PRI_HIGH,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions)
         dp.send_msg(mod)
 
@@ -149,6 +148,35 @@ class SimpleSwitch(app_manager.RyuApp):
         mod = parser.OFPFlowMod(
             datapath = dp, match=match, cookie=0,
             command  = ofp.OFPFC_ADD, idle_timeout=0, hard_timeout=0,
-            priority = 999,
+            priority = SimpleSwitch.PRI_HIGH,
             flags    = ofp.OFPFF_SEND_FLOW_REM, actions=actions) 
         dp.send_msg(mod)
+
+    def _monitor(self):
+        while True:
+            print('controller_datapth %d', self.controller_datapath)
+            if self.controller_datapath != None:
+                print self.controller_datapath.id
+                ofproto = self.controller_datapath.ofproto
+                parser  = self.controller_datapath.ofproto_parser
+                match   = parser.OFPMatch(in_port=1)
+                datapath = self.controller_datapath
+                table_id = 0xff
+                out_port = ofproto.OFPP_NONE
+                req = parser.OFPFlowStatsRequest(datapath, 0, match, table_id, out_port)
+
+                datapath.send_msg(req)
+
+            hub.sleep(3)
+
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    def flow_stats_reply_handler(self, ev):
+        msg = ev.msg
+        ofp = msg.datapath.ofproto
+        body = ev.msg.body
+
+        flows = []
+        for stat in body:
+            #flows.append('count' %stat.packet_count)
+            print stat.packet_count
+        self.logger.debug('FlowStats: %s', flows)    
