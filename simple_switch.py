@@ -155,24 +155,18 @@ class SimpleSwitch(app_manager.RyuApp):
     def _monitor(self):
         while True:
             if self.controller_datapath != None:
-                ofproto = self.controller_datapath.ofproto
                 parser  = self.controller_datapath.ofproto_parser
-                match   = parser.OFPMatch(in_port=1)
                 datapath = self.controller_datapath
-                table_id = 0xff
-                out_port = ofproto.OFPP_NONE
-                
-                req = parser.OFPFlowStatsRequest(datapath, 0, match, table_id, out_port)
+                req = parser.OFPPortStatsRequest(datapath, 0, 1)
                 datapath.send_msg(req)
             hub.sleep(5)
 
-    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def flow_stats_reply_handler(self, ev):
         body = ev.msg.body
-        #if len(body) > 0: 
-            #self.logger.info('Host 1 packet count: %s', body[0].packet_count)
- 
-        for stat in body:    
-            self.logger.info('Packet Count Host-1: %s', stat.packet_count+1)    
+        
+        for stat in body:        
+            self.logger.info('Packet Count Host-1: recieved = %s transmitted = %s ', 
+                             stat.rx_packets, stat.tx_packets)    
 
 
