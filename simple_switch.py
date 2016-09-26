@@ -164,7 +164,7 @@ class SimpleSwitch(app_manager.RyuApp):
                 
                 req = parser.OFPFlowStatsRequest(datapath, 0, match, table_id, out_port)
                 datapath.send_msg(req)
-            hub.sleep(3)
+            hub.sleep(5)
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def flow_stats_reply_handler(self, ev):
@@ -173,6 +173,6 @@ class SimpleSwitch(app_manager.RyuApp):
             #self.logger.info('Host 1 packet count: %s', body[0].packet_count)
  
         for stat in body:    
-            self.logger.info('Packet Count Host-1: %s', stat.packet_count)    
+            self.logger.info('Packet Count Host-1: %s', stat.packet_count+1)    
 
 
