@@ -31,33 +31,22 @@ from ryu.lib.mac import haddr_to_bin
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.ip import ipv4_to_bin
-
 from ryu.lib import hub
-
-from ryu.topology.switches import LLDPPacket
-
-
 from ryu.topology.api import get_switch, get_link
-from ryu.app.wsgi import ControllerBase
-from ryu.topology import event, switches
-import networkx as nx
+
 
 class SimpleSwitch(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
     (PRI_LOW, PRI_HIGH) = (50,100)
+    
     controller_datapath = None
+    lldp_dict = []
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor) 
-        self.topology_api_app = self
-        self.net=nx.DiGraph()
-        self.nodes = {}
-        self.links = {}
-        self.no_of_nodes = 0
-        self.no_of_links = 0
-        self.i=0
+        
         
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
@@ -82,31 +71,18 @@ class SimpleSwitch(app_manager.RyuApp):
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocol(ethernet.ethernet)
         
-        print hex(eth.ethertype)
-        if eth.ethertype == 0x88cc:
-            print "LLDP found!!!!!!!!!!!!!!!"
+        if eth.ethertype == 0x88cc:   #0x88cc == LLDP
+            self.lldp_dict.append(msg)
+            print "LLDP found, amount collected = %d",len(self.lldp_dict)
             return
-        
-        if hex(eth.ethertype) == 0x88cc:
-            print "LLDP found!!!!!!!!!!!!!!!"
-            return
-
-
-        try:
-            # ignore lldp packet
-            LLDPPacket.lldp_parse(msg.data)
-            print "LLDP found!!!!!!!!!!!!!!!"
-            return
-        except LLDPPacket.LLDPUnknownFormat:
-            pass
-        
+                    
         dst = eth.dst
         src = eth.src
 
         dpid = datapath.id
         self.mac_to_port.setdefault(dpid, {})
 
-        self.logger.info("packet in %s %s %s %s", dpid, src, dst, msg.in_port)
+        #self.logger.info("packet in %s %s %s %s", dpid, src, dst, msg.in_port)
 
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = msg.in_port
@@ -197,35 +173,6 @@ class SimpleSwitch(app_manager.RyuApp):
             #self.logger.info('Host 1 packet count: %s', body[0].packet_count)
         #flows = []
         for stat in body:    
-            #print stat.packet_count
             self.logger.info('Packet Count Host-1: %s', stat.packet_count)    
 
 
-    @set_ev_cls(event.EventSwitchEnter)
-    def get_topology_data(self, ev):
-        switch_list = get_switch(self.topology_api_app, None)   
-        switches=[switch.dp.id for switch in switch_list]
-        self.net.add_nodes_from(switches)
-         
-        #print "**********List of switches"
-        #for switch in switch_list:
-        #self.ls(switch)
-        #print switch
-        #self.nodes[self.no_of_nodes] = switch
-        #self.no_of_nodes += 1
-	
-        links_list = get_link(self.topology_api_app, None)
-        #print links_list
-        links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-        #print links
-        self.net.add_edges_from(links)
-        links=[(link.dst.dpid,link.src.dpid,{'port':link.dst.port_no}) for link in links_list]
-        #print links
-        self.net.add_edges_from(links)
-        print "**********List of links"
-        print self.net.edges()
-        #for link in links_list:
-	    #print link.dst
-            #print link.src
-            #print "Novo link"
-	    #self.no_of_links += 1
