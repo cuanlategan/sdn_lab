@@ -40,14 +40,13 @@ class SimpleSwitch(app_manager.RyuApp):
     (PRI_LOW, PRI_HIGH) = (50,100)
     
     controller_datapath = None
-    lldp_dict = []
+    lldp_set = set()
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor) 
-        
-        
+                 
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
 
@@ -60,7 +59,6 @@ class SimpleSwitch(app_manager.RyuApp):
             priority=self.PRI_LOW,
             flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
         datapath.send_msg(mod)
-        
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -72,8 +70,10 @@ class SimpleSwitch(app_manager.RyuApp):
         eth = pkt.get_protocol(ethernet.ethernet)
         
         if eth.ethertype == 0x88cc:   #0x88cc == LLDP
-            self.lldp_dict.append(msg)
-            print "LLDP found, amount collected = %d",len(self.lldp_dict)
+            lldp_count = len(self.lldp_set)
+            self.lldp_set.update(msg.data)
+            if lldp_count != len(self.lldp_set):
+                print "LLDP found: amount collected = ",len(self.lldp_set)
             return
                     
         dst = eth.dst
@@ -171,7 +171,7 @@ class SimpleSwitch(app_manager.RyuApp):
         body = ev.msg.body
         #if len(body) > 0: 
             #self.logger.info('Host 1 packet count: %s', body[0].packet_count)
-        #flows = []
+ 
         for stat in body:    
             self.logger.info('Packet Count Host-1: %s', stat.packet_count)    
 
